@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Image Comparison Tool</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen" x-data="imageComparison()">
+    <div class="container mx-auto px-4 py-8">
+        <!-- Header -->
+        <div class="text-center mb-12">
+            <h1 class="text-4xl font-bold text-gray-800 mb-2">Advanced Image Comparison Tool</h1>
+            <p class="text-gray-600">Upload two images for detailed similarity analysis</p>
+        </div>
+
+        <!-- Main Content -->
+        <div class="max-w-6xl mx-auto bg-white rounded-lg shadow-lg p-6">
+            <!-- Image Upload Section -->
+            <div class="grid md:grid-cols-2 gap-6 mb-8">
+                <!-- Image 1 -->
+                <div class="space-y-4">
+                    <label class="block text-gray-700 text-sm font-bold mb-2">First Image</label>
+                    <div class="relative h-64 border-2 border-dashed border-gray-300 rounded-lg"
+                         :class="{'border-blue-500': isDragging1}"
+                         @dragover.prevent="isDragging1 = true"
+                         @dragleave.prevent="isDragging1 = false"
+                         @drop.prevent="handleDrop($event, 1)">
+                        <template x-if="!preview1">
+                            <div class="absolute inset-0 flex flex-col items-center justify-center">
+                                <svg class="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                          d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                                </svg>
+                                <span class="mt-2 text-gray-500">Drag & Drop or Click to Upload</span>
+                            </div>
+                        </template>
+                        <template x-if="preview1">
+                            <img :src="preview1" class="h-full w-full object-contain rounded-lg" alt="Preview 1">
+                        </template>
+                        <input type="file" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                               accept="image/*" @change="handleFileSelect($event, 1)">
+                    </div>
+                </div>
+
+                <!-- Image 2 -->
+                <div class="space-y-4">
+                    <label class="block text-gray-700 text-sm font-bold mb-2">Second Image</label>
+                    <div class="relative h-64 border-2 border-dashed border-gray-300 rounded-lg"
+                         :class="{'border-blue-500': isDragging2}"
+                         @dragover.prevent="isDragging2 = true"
+                         @dragleave.prevent="isDragging2 = false"
+                         @drop.prevent="handleDrop($event, 2)">
+                        <template x-if="!preview2">
+                            <div class="absolute inset-0 flex flex-col items-center justify-center">
+                                <svg class="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                          d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                                </svg>
+                                <span class="mt-2 text-gray-500">Drag & Drop or Click to Upload</span>
+                            </div>
+                        </template>
+                        <template x-if="preview2">
+                            <img :src="preview2" class="h-full w-full object-contain rounded-lg" alt="Preview 2">
+                        </template>
+                        <input type="file" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                               accept="image/*" @change="handleFileSelect($event, 2)">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Compare Button -->
+            <div class="text-center mb-8">
+                <button @click="compareImages"
+                        :disabled="!file1 || !file2 || isLoading"
+                        class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-4 px-12 rounded-full disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200 text-lg shadow-lg transform hover:scale-105">
+                    <template x-if="!isLoading">
+                        <span>Analyze Images</span>
+                    </template>
+                    <template x-if="isLoading">
+                        <div class="flex items-center">
+                            <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Analyzing...
+                        </div>
+                    </template>
+                </button>
+            </div>
+
+            <!-- Result Section -->
+            <div x-show="analysis" x-cloak
+                 class="mt-8 space-y-6">
+                
+                <!-- Overall Verdict -->
+                <div class="text-center p-6 bg-gray-50 rounded-xl">
+                    <h2 class="text-2xl font-bold mb-4">Analysis Result</h2>
+                    <p class="text-xl mb-4" x-text="analysis.verdict"></p>
+                    
+                    <!-- Overall Similarity Bar -->
+                    <div class="max-w-2xl mx-auto">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-sm font-medium">Overall Similarity</span>
+                            <span class="text-sm font-medium" x-text="analysis.overall_similarity + '%'"></span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
+                            <div class="h-full transition-all duration-500"
+                                 :class="{
+                                     'bg-red-500': analysis.overall_similarity < 50,
+                                     'bg-yellow-500': analysis.overall_similarity >= 50 && analysis.overall_similarity < 70,
+                                     'bg-blue-500': analysis.overall_similarity >= 70 && analysis.overall_similarity < 90,
+                                     'bg-green-500': analysis.overall_similarity >= 90
+                                 }"
+                                 :style="'width: ' + analysis.overall_similarity + '%'"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Detailed Analysis -->
+                <div class="grid md:grid-cols-2 gap-6">
+                    <!-- Similarity Metrics -->
+                    <div class="bg-white p-6 rounded-xl shadow">
+                        <h3 class="text-lg font-semibold mb-4">Similarity Metrics</h3>
+                        <div class="space-y-4">
+                            <div>
+                                <div class="flex justify-between mb-1">
+                                    <span>Histogram Similarity</span>
+                                    <span x-text="analysis.histogram_similarity + '%'"></span>
+                                </div>
+                                <div class="w-full bg-gray-200 rounded-full h-2">
+                                    <div class="bg-blue-500 h-2 rounded-full"
+                                         :style="'width: ' + analysis.histogram_similarity + '%'"></div>
+                                </div>
+                            </div>
+                            <div>
+                                <div class="flex justify-between mb-1">
+                                    <span>Structural Similarity</span>
+                                    <span x-text="analysis.structural_similarity + '%'"></span>
+                                </div>
+                                <div class="w-full bg-gray-200 rounded-full h-2">
+                                    <div class="bg-green-500 h-2 rounded-full"
+                                         :style="'width: ' + analysis.structural_similarity + '%'"></div>
+                                </div>
+                            </div>
+                            <div>
+                                <div class="flex justify-between mb-1">
+                                    <span>Hash Similarity</span>
+                                    <span x-text="analysis.hash_similarity + '%'"></span>
+                                </div>
+                                <div class="w-full bg-gray-200 rounded-full h-2">
+                                    <div class="bg-purple-500 h-2 rounded-full"
+                                         :style="'width: ' + analysis.hash_similarity + '%'"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Technical Details -->
+                    <div class="bg-white p-6 rounded-xl shadow">
+                        <h3 class="text-lg font-semibold mb-4">Technical Details</h3>
+                        <div class="space-y-3 text-sm">
+                            <div class="flex justify-between">
+                                <span class="font-medium">Dimensions Match:</span>
+                                <span x-text="analysis.dimension_match ? 'Yes' : 'No'"
+                                      :class="analysis.dimension_match ? 'text-green-600' : 'text-red-600'"></span>
+                            </div>
+                            <div>
+                                <p class="font-medium mb-1">Original Dimensions:</p>
+                                <p class="ml-4">Image 1: <span x-text="analysis.original_dimensions.image1"></span></p>
+                                <p class="ml-4">Image 2: <span x-text="analysis.original_dimensions.image2"></span></p>
+                            </div>
+                            <template x-if="analysis.differences.length > 0">
+                                <div>
+                                    <p class="font-medium text-red-600 mb-1">Detected Differences:</p>
+                                    <ul class="list-disc ml-6">
+                                        <template x-for="diff in analysis.differences" :key="diff">
+                                            <li x-text="diff"></li>
+                                        </template>
+                                    </ul>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Error Alert -->
+            <div x-show="error" x-cloak
+                 class="mt-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded">
+                <span x-text="error"></span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function imageComparison() {
+            return {
+                file1: null,
+                file2: null,
+                preview1: null,
+                preview2: null,
+                isDragging1: false,
+                isDragging2: false,
+                analysis: null,
+                error: null,
+                isLoading: false,
+
+                handleFileSelect(event, imageNum) {
+                    const file = event.target.files[0];
+                    this.handleFile(file, imageNum);
+                },
+
+                handleDrop(event, imageNum) {
+                    this[`isDragging${imageNum}`] = false;
+                    const file = event.dataTransfer.files[0];
+                    this.handleFile(file, imageNum);
+                },
+
+                handleFile(file, imageNum) {
+                    if (!file || !file.type.startsWith('image/')) {
+                        this.error = 'Please upload a valid image file';
+                        return;
+                    }
+
+                    this[`file${imageNum}`] = file;
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        this[`preview${imageNum}`] = e.target.result;
+                    };
+                    reader.readAsDataURL(file);
+                    this.error = null;
+                    this.analysis = null;
+                },
+
+                async compareImages() {
+                    if (!this.file1 || !this.file2) {
+                        this.error = 'Please select both images';
+                        return;
+                    }
+
+                    this.isLoading = true;
+                    this.error = null;
+                    this.analysis = null;
+
+                    const formData = new FormData();
+                    formData.append('image1', this.file1);
+                    formData.append('image2', this.file2);
+
+                    try {
+                        const response = await fetch('/upload', {
+                            method: 'POST',
+                            body: formData
+                        });
+
+                        const data = await response.json();
+
+                        if (response.ok) {
+                            this.analysis = data;
+                        } else {
+                            this.error = data.error || 'An error occurred while comparing images';
+                        }
+                    } catch (error) {
+                        this.error = 'An error occurred while comparing images';
+                    } finally {
+                        this.isLoading = false;
+                    }
+                }
+            }
+        }
+    </script>
+</body>
+</html>
